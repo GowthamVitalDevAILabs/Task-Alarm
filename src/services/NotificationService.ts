@@ -54,39 +54,30 @@ export class NotificationService {
             appOwnership: Constants.appOwnership,
           });
           
-          // Check if this is a scheduled notification that should actually trigger now
-          let shouldTrigger = false;
-          
+          // Log timing information for debugging
+          let timingInfo = {};
           if (trigger && 'date' in trigger) {
             const scheduledTime = new Date(trigger.date);
             const timeDiff = Math.abs(now.getTime() - scheduledTime.getTime());
             
-            // Allow 1 minute tolerance for timing differences
-            shouldTrigger = timeDiff <= 60000; // 60 seconds
-            
-            console.log('[NotificationService] Scheduled notification check:', {
+            timingInfo = {
               scheduledTime: scheduledTime.toISOString(),
               currentTime: now.toISOString(),
-              timeDiff: timeDiff / 1000, // seconds
-              shouldTrigger,
-            });
+              timeDiffSeconds: timeDiff / 1000,
+            };
+            
+            console.log('[NotificationService] Notification timing:', timingInfo);
           }
           
-          // In development mode (Expo Go), we need to be more restrictive
-          // Only show notifications that are actually due to trigger
-          if (isDevelopment && !shouldTrigger) {
-            console.warn('[NotificationService] DEVELOPMENT MODE: Notification blocked - not yet due to trigger');
-            console.warn('[NotificationService] This is expected behavior in Expo Go. Notifications will work correctly in production builds.');
-          }
-          
-          // CRITICAL: Return proper notification behavior configuration
-          // This tells the system how to display the notification
-          const shouldShow = shouldTrigger;
+          // IMPORTANT: Always show the notification
+          // Expo-notifications handles the actual scheduling
+          // We just handle how to display it when triggered
+          const shouldShow = true;
           
           return {
             shouldShowAlert: shouldShow,
             shouldPlaySound: shouldShow,
-            shouldSetBadge: false,
+            shouldSetBadge: true,
             shouldShowBanner: shouldShow, // Show as banner for visibility
             shouldShowList: shouldShow,
           };
