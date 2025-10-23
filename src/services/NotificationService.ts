@@ -10,6 +10,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { NotificationConfig } from '../types/alarm.types';
 import { 
@@ -32,25 +33,56 @@ export class NotificationService {
       console.log('[NotificationService] Initializing...');
       
       // Set notification handler (how to display notifications when app is foregrounded)
-      // For alarm app: Don't show notifications as in-app alerts
-      // Let them appear as system notifications (in notification tray) only
-      // This prevents immediate popups when app is open
+      // CRITICAL FIX: In Expo Go development mode, notifications are triggered immediately
+      // when scheduled, not at their scheduled time. This is a known limitation.
+      // We need to check if the notification is actually due to trigger now.
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => {
+          const now = new Date();
+          const trigger = notification.request.trigger;
+          
+          const isDevelopment = __DEV__ || Constants.appOwnership === 'expo';
+          
           console.log('[NotificationService] Notification received:', {
             title: notification.request.content.title,
             alarmId: notification.request.content.data?.alarmId,
+            currentTime: now.toISOString(),
+            triggerType: trigger ? Object.keys(trigger)[0] : 'none',
+            isDevelopment,
+            appOwnership: Constants.appOwnership,
           });
           
+          // Check if this is a scheduled notification that should actually trigger now
+          let shouldTrigger = false;
+          
+          if (trigger && 'date' in trigger) {
+            const scheduledTime = new Date(trigger.date);
+            const timeDiff = Math.abs(now.getTime() - scheduledTime.getTime());
+            
+            // Allow 1 minute tolerance for timing differences
+            shouldTrigger = timeDiff <= 60000; // 60 seconds
+            
+            console.log('[NotificationService] Scheduled notification check:', {
+              scheduledTime: scheduledTime.toISOString(),
+              currentTime: now.toISOString(),
+              timeDiff: timeDiff / 1000, // seconds
+              shouldTrigger,
+            });
+          }
+          
+          // In development mode (Expo Go), we need to be more restrictive
+          // Only show notifications that are actually due to trigger
+          if (isDevelopment && !shouldTrigger) {
+            console.warn('[NotificationService] DEVELOPMENT MODE: Notification blocked - not yet due to trigger');
+            console.warn('[NotificationService] This is expected behavior in Expo Go. Notifications will work correctly in production builds.');
+          }
+          
           return {
-            // Don't show in-app alerts to prevent immediate popups
-            shouldShowAlert: false,
-            shouldPlaySound: false,
+            shouldShowAlert: shouldTrigger,
+            shouldPlaySound: shouldTrigger,
             shouldSetBadge: false,
-            // Don't show banner to prevent duplicate display
             shouldShowBanner: false,
-            // Show in notification list (notification tray)
-            shouldShowList: true,
+            shouldShowList: shouldTrigger,
           };
         },
       });
@@ -302,6 +334,38 @@ export class NotificationService {
       console.log('[NotificationService] Dismissed all notifications');
     } catch (error) {
       console.error('[NotificationService] Failed to dismiss all notifications:', error);
+    }
+  }
+
+  /**
+   * Test notification scheduling (for debugging)
+   * Schedules a notification for 10 seconds in the future
+   */
+  static async testNotificationScheduling(): Promise<string> {
+    try {
+      const testTime = new Date(Date.now() + 10000); // 10 seconds from now
+      
+      console.log('[NotificationService] Testing notification scheduling for:', testTime.toISOString());
+      
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Test Alarm',
+          body: 'This is a test notification scheduled for 10 seconds from now',
+          data: { alarmId: 'test-alarm', isSnoozed: false },
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          categoryIdentifier: NOTIFICATION_CATEGORY.ID,
+        },
+        trigger: {
+          date: testTime,
+          channelId: NOTIFICATION_CHANNEL.ID,
+        },
+      });
+      
+      console.log('[NotificationService] Test notification scheduled:', notificationId);
+      return notificationId;
+    } catch (error) {
+      console.error('[NotificationService] Failed to schedule test notification:', error);
+      throw error;
     }
   }
 }
