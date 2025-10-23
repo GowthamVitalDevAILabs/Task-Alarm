@@ -40,12 +40,14 @@ export class NotificationService {
         handleNotification: async (notification) => {
           const now = new Date();
           const trigger = notification.request.trigger;
+          const content = notification.request.content;
           
           const isDevelopment = __DEV__ || Constants.appOwnership === 'expo';
           
           console.log('[NotificationService] Notification received:', {
-            title: notification.request.content.title,
-            alarmId: notification.request.content.data?.alarmId,
+            title: content.title,
+            body: content.body,
+            alarmId: content.data?.alarmId,
             currentTime: now.toISOString(),
             triggerType: trigger ? Object.keys(trigger)[0] : 'none',
             isDevelopment,
@@ -77,12 +79,16 @@ export class NotificationService {
             console.warn('[NotificationService] This is expected behavior in Expo Go. Notifications will work correctly in production builds.');
           }
           
+          // CRITICAL: Return proper notification behavior configuration
+          // This tells the system how to display the notification
+          const shouldShow = shouldTrigger;
+          
           return {
-            shouldShowAlert: shouldTrigger,
-            shouldPlaySound: shouldTrigger,
+            shouldShowAlert: shouldShow,
+            shouldPlaySound: shouldShow,
             shouldSetBadge: false,
-            shouldShowBanner: false,
-            shouldShowList: shouldTrigger,
+            shouldShowBanner: shouldShow, // Show as banner for visibility
+            shouldShowList: shouldShow,
           };
         },
       });
@@ -212,20 +218,29 @@ export class NotificationService {
       const { title, body, data, sound, triggerDate } = config;
       
       console.log('[NotificationService] Scheduling notification:', {
-        title,
+        title: title || 'Alarm',
+        body: body || 'Wake up!',
         triggerDate: triggerDate.toISOString(),
         alarmId: data.alarmId,
       });
       
+      // Ensure notification content is complete with all required fields
+      const notificationContent = {
+        title: title && title.trim().length > 0 ? title : 'Alarm',
+        body: body && body.trim().length > 0 ? body : 'Wake up!',
+        subtitle: 'Task Alarm',
+        data: data || { alarmId: 'unknown' },
+        sound: sound === 'default' || !sound ? 'default' : sound,
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        categoryIdentifier: NOTIFICATION_CATEGORY.ID,
+        // Ensure notification is visible in notification tray
+        badge: 1,
+      };
+      
+      console.log('[NotificationService] Notification content:', notificationContent);
+      
       const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          data,
-          sound: sound === 'default' ? 'default' : sound,
-          priority: Notifications.AndroidNotificationPriority.MAX,
-          categoryIdentifier: NOTIFICATION_CATEGORY.ID,
-        },
+        content: notificationContent as any,
         trigger: {
           date: triggerDate,
           channelId: NOTIFICATION_CHANNEL.ID,
