@@ -50,6 +50,7 @@ export class SchedulerService {
         alarmId: alarm.id,
         isSnoozed: false,
         label: alarm.label,
+        scheduledAt: nextTriggerTime.toISOString(),
       };
       
       // Get formatted time for display
@@ -168,6 +169,7 @@ export class SchedulerService {
         alarmId: originalAlarm.id,
         isSnoozed: true,
         label: originalAlarm.label,
+        scheduledAt: snoozeTime.toISOString(),
       };
       
       // Schedule snooze notification

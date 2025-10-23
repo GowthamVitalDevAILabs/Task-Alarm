@@ -98,6 +98,9 @@ export interface NotificationData extends Record<string, unknown> {
   
   /** Original alarm label */
   label?: string;
+  
+  /** ISO datetime when this notification is intended to trigger */
+  scheduledAt?: string;
 }
 
 /**

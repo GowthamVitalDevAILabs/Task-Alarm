@@ -42,43 +42,74 @@ export class NotificationService {
           const trigger = notification.request.trigger;
           const content = notification.request.content;
           
-          const isDevelopment = __DEV__ || Constants.appOwnership === 'expo';
-          
-          console.log('[NotificationService] Notification received:', {
+          console.log('═══════════════════════════════════════════════════════════');
+          console.log('[NotificationService] ⚠️ HANDLER CALLED - Notification received:');
+          console.log({
             title: content.title,
             body: content.body,
             alarmId: content.data?.alarmId,
             currentTime: now.toISOString(),
             triggerType: trigger ? Object.keys(trigger)[0] : 'none',
-            isDevelopment,
-            appOwnership: Constants.appOwnership,
           });
           
-          // Log timing information for debugging
+          // Check if this notification should actually be shown now
+          let shouldShow = true;
           let timingInfo = {};
-          if (trigger && 'date' in trigger) {
-            const scheduledTime = new Date(trigger.date);
-            const timeDiff = Math.abs(now.getTime() - scheduledTime.getTime());
+          
+          // Prefer scheduledAt from content.data if provided
+          const dataScheduledAt = typeof content.data?.scheduledAt === 'string' ? content.data.scheduledAt : undefined;
+          const scheduledIso = dataScheduledAt || (trigger && 'date' in trigger ? new Date(trigger.date).toISOString() : undefined);
+          
+          if (scheduledIso) {
+            const scheduledTime = new Date(scheduledIso);
+            const timeDiffMs = scheduledTime.getTime() - now.getTime();
+            const timeDiffSeconds = timeDiffMs / 1000;
             
             timingInfo = {
               scheduledTime: scheduledTime.toISOString(),
               currentTime: now.toISOString(),
-              timeDiffSeconds: timeDiff / 1000,
+              timeDiffSeconds: timeDiffSeconds.toFixed(1),
+              isInFuture: timeDiffSeconds > 0,
+              source: dataScheduledAt ? 'data.scheduledAt' : 'trigger.date',
             };
             
-            console.log('[NotificationService] Notification timing:', timingInfo);
+            console.log('[NotificationService] ⏰ TIMING INFO:', timingInfo);
+            
+            // Allow 30 seconds tolerance
+            const TOLERANCE_SECONDS = 30;
+            
+            if (timeDiffSeconds > TOLERANCE_SECONDS) {
+              shouldShow = false;
+              console.warn('🚫 NOTIFICATION BLOCKED - TOO FAR IN FUTURE');
+              console.warn({
+                secondsUntilTrigger: timeDiffSeconds.toFixed(1),
+                tolerance: TOLERANCE_SECONDS,
+                action: 'NOT SHOWING',
+              });
+            } else if (timeDiffSeconds > 0) {
+              console.warn('⏳ NOTIFICATION SHOWING - CLOSE ENOUGH TO TRIGGER TIME');
+              console.warn({
+                secondsUntilTrigger: timeDiffSeconds.toFixed(1),
+                tolerance: TOLERANCE_SECONDS,
+                action: 'SHOWING',
+              });
+            } else {
+              console.warn('✅ NOTIFICATION SHOWING - TRIGGER TIME HAS PASSED');
+              console.warn({
+                secondsAgo: Math.abs(timeDiffSeconds).toFixed(1),
+                action: 'SHOWING',
+              });
+            }
           }
           
-          // IMPORTANT: Always show the notification
-          // Expo-notifications handles the actual scheduling
-          // We just handle how to display it when triggered
-          const shouldShow = true;
+          console.log('[NotificationService] Decision: shouldShow =', shouldShow);
+          console.log('═══════════════════════════════════════════════════════════');
           
           return {
             shouldShowAlert: shouldShow,
             shouldPlaySound: shouldShow,
-            shouldSetBadge: true,
-            shouldShowBanner: shouldShow, // Show as banner for visibility
+            shouldSetBadge: shouldShow,
+            shouldShowBanner: shouldShow,
             shouldShowList: shouldShow,
           };
         },
